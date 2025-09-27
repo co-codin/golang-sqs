@@ -1,3 +1,3 @@
-module github.com/co-codin/golang-k8s
+module go-sqs
 
 go 1.24.6
