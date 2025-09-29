@@ -7,17 +7,18 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type UserStore struct {
-	db *sql.DB
+	db *sqlx.DB
 }
 
 func NewUserStore(db *sql.DB) *UserStore {
 	return &UserStore{
-		db: db,
+		db: sqlx.NewDb(db, "postgres"),
 	}
 }
 
@@ -59,7 +60,6 @@ func (s *UserStore) CreateUser(ctx context.Context, email, password string) (*Us
 
 	return &user, nil
 }
-
 
 func (s *UserStore) ByEmail(ctx context.Context, email string) (*User, error) {
 	const query = `SELECT * FROM users where email = $1;`

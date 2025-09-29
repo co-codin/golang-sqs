@@ -9,4 +9,12 @@ services:
     ports:
       - ${DB_PORT}:5432
   
-  
+  test_db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - ${DB_PORT_TEST}:5433
