@@ -1,7 +1,7 @@
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(320) NOT NULL UNIQUE,
-    hashed_password VARCHAR(76) NOT NULL, -- bcrypt password base64 encoded
+    hashed_password VARCHAR(250) NOT NULL, -- bcrypt password base64 encoded
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
