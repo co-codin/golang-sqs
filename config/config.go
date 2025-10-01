@@ -14,6 +14,8 @@ const (
 )
 
 type Config struct {
+	ApiServerPort    string `env:"APISERVER_PORT"`
+	ApiServerHost    string `env:"APISERVER_HOST"`
 	DatabaseName     string `env:"DB_NAME"`
 	DatabaseHost     string `env:"DB_HOST"`
 	DatabasePort     string `env:"DB_PORT"`
@@ -21,7 +23,7 @@ type Config struct {
 	DatabasePassword string `env:"DB_PASSWORD"`
 	DatabasePortTest string `env:"DB_PORT_TEST"`
 	Env              Env    `env:"ENV" envDefault:"dev"`
-	ProjectRoot string `env:"PROJECT_ROOT"`
+	ProjectRoot      string `env:"PROJECT_ROOT"`
 }
 
 func (c *Config) DatabaseUrl() string {

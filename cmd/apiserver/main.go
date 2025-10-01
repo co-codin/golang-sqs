@@ -5,6 +5,7 @@ import (
 	"go-sqs/apiserver"
 	"go-sqs/config"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -31,7 +32,9 @@ func run() error {
 		return err
 	}
 
-	server := apiserver.New(conf)
+	jsonHandler := slog.NewJSONHandler(os.Stdout, nil)
+	logger := slog.New(jsonHandler)
+	server := apiserver.New(conf, logger)
 	if err = server.Start(ctx); err != nil {
 		return err
 	}
