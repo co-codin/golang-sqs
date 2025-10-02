@@ -1,8 +1,9 @@
 package apiserver
 
 import (
-	"encoding/json"
+	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 )
 
@@ -27,38 +28,32 @@ type ApiResponse[T any] struct {
 	Message string `json:"message,omitempty"`
 }
 
-func (s *ApiServer) signupHandler(w http.ResponseWriter, r *http.Request) {
-	var req SignupRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	defer r.Body.Close()
+func (s *ApiServer) signupHandler() http.HandlerFunc {
+	return handler(func(w http.ResponseWriter, r *http.Request) error {
+		req, err := decode[SignupRequest](r)
+		if err != nil {
+			return NewErrWithStatus(http.StatusBadRequest, err)
+		}
 
-	if err := req.Validate(); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+		existingUser, err := s.store.Users.ByEmail(r.Context(), req.Email)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 
-	existingUser, err := s.store.Users.ByEmail(r.Context(), req.Email)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+		if existingUser != nil {
+			return NewErrWithStatus(http.StatusBadRequest, fmt.Errorf("user exists: %v", existingUser))
+		}
 
-	if existingUser != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
-	}
+		if _, err = s.store.Users.CreateUser(r.Context(), req.Email, req.Password); err != nil {
+			return NewErrWithStatus(http.StatusInternalServerError, err)
+		}
 
-	if _, err = s.store.Users.CreateUser(r.Context(), req.Email, req.Password); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+		if err := encode[ApiResponse[struct{}]](ApiResponse[struct{}]{
+			Message: "successfully signed up user",
+		}, http.StatusCreated, w); err != nil {
+			return NewErrWithStatus(http.StatusInternalServerError, err)
+		}
+		return nil
+	})
 
-	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(ApiResponse[struct{}]{
-		Message: "successfully signed up user",
-	}); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
 }

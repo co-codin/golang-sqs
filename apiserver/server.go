@@ -14,14 +14,14 @@ import (
 type ApiServer struct {
 	Config *config.Config
 	logger *slog.Logger
-	store *store.Store
+	store  *store.Store
 }
 
 func New(config *config.Config, logger *slog.Logger, store *store.Store) *ApiServer {
 	return &ApiServer{
 		Config: config,
 		logger: logger,
-		store: store,
+		store:  store,
 	}
 }
 
@@ -33,7 +33,7 @@ func (s *ApiServer) ping(w http.ResponseWriter, r *http.Request) {
 func (s *ApiServer) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ping", s.ping)
-	mux.HandleFunc("POST /auth/singup", s.signupHandler)
+	mux.HandleFunc("POST /auth/singup", s.signupHandler())
 
 	middleware := NewLoggerMiddleware(s.logger)
 	server := &http.Server{
@@ -53,7 +53,7 @@ func (s *ApiServer) Start(ctx context.Context) error {
 		defer wg.Done()
 		<-ctx.Done()
 
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10 * time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		if err := server.Shutdown(shutdownCtx); err != nil {
