@@ -3,6 +3,7 @@ package apiserver
 import (
 	"context"
 	"go-sqs/config"
+	"go-sqs/store"
 	"log/slog"
 	"net"
 	"net/http"
@@ -13,12 +14,14 @@ import (
 type ApiServer struct {
 	Config *config.Config
 	logger *slog.Logger
+	store *store.Store
 }
 
-func New(config *config.Config, logger *slog.Logger) *ApiServer {
+func New(config *config.Config, logger *slog.Logger, store *store.Store) *ApiServer {
 	return &ApiServer{
 		Config: config,
 		logger: logger,
+		store: store,
 	}
 }
 
@@ -29,7 +32,8 @@ func (s *ApiServer) ping(w http.ResponseWriter, r *http.Request) {
 
 func (s *ApiServer) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/ping", s.ping)
+	mux.HandleFunc("GET /ping", s.ping)
+	mux.HandleFunc("POST /auth/singup", s.signupHandler)
 
 	middleware := NewLoggerMiddleware(s.logger)
 	server := &http.Server{
