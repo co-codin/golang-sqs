@@ -57,3 +57,38 @@ func (s *ApiServer) signupHandler() http.HandlerFunc {
 	})
 
 }
+
+
+type SigninRequest struct {
+	Email string `json:"email"`
+	Password string `json:"password"`
+}
+
+func (r SigninRequest) Validate() error {
+	if r.Email == "" {
+		return errors.New("email is required")
+	}
+	if r.Password == "" {
+		return errors.New("password is required")
+	}
+
+	return nil
+}
+
+func (s *ApiServer) signinHandler() http.HandlerFunc {
+	return handler(func(w http.ResponseWriter, r *http.Request) error {
+		req, err := decode[SigninRequest](r)
+		if err != nil {
+			return NewErrWithStatus(http.StatusBadRequest, err)
+		}
+
+		user, err := s.store.Users.ByEmail(r.Context(), req.Email)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+
+		if err := user.ComparePassword(req.Password); err != nil {
+			return NewErrWithStatus(http.StatusUnauthorized, err)
+		}
+	})
+}

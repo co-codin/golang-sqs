@@ -15,13 +15,15 @@ type ApiServer struct {
 	Config *config.Config
 	logger *slog.Logger
 	store  *store.Store
+	JwtManager *JwtManager
 }
 
-func New(config *config.Config, logger *slog.Logger, store *store.Store) *ApiServer {
+func New(config *config.Config, logger *slog.Logger, store *store.Store, jwtManager *JwtManager) *ApiServer {
 	return &ApiServer{
 		Config: config,
 		logger: logger,
 		store:  store,
+		JwtManager: jwtManager,
 	}
 }
 
