@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"go-sqs/config"
 	"time"
-
-	"github.com/golang-jwt/jwt"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
@@ -21,7 +19,7 @@ func NewJwtManager(config *config.Config) *JwtManager {
 }
 
 type TokenPair struct {
-	AccessToken *jwt.Token
+	AccessToken  *jwt.Token
 	RefreshToken *jwt.Token
 }
 
@@ -46,7 +44,7 @@ func (j *JwtManager) Parse(token string) (*jwt.Token, error) {
 	return jwtToken, nil
 }
 
-func (j *JwtManager) IsAccessToken(token string) bool {
+func (j *JwtManager) IsAccessToken(token *jwt.Token) bool {
 	jwtClaims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
 		return false
@@ -63,39 +61,48 @@ func (j *JwtManager) GenerateTokenPair(userId uuid.UUID) (*TokenPair, error) {
 	issuer := "http://" + j.config.ApiServerHost + ":" + j.config.ApiServerPort
 
 	jwtAccessToken := jwt.NewWithClaims(signingMethod, CustomClaims{
-		TokenType: "Bearer",
+		TokenType: "access",
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject: userId.String(),
-			Issuer: issuer,
+			Subject:   userId.String(),
+			Issuer:    issuer,
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Minute * 15)),
-			IssuedAt: jwt.NewNumericDate(now),
+			IssuedAt:  jwt.NewNumericDate(now),
 		},
 	})
 
 	key := []byte(j.config.JwtSecret)
-	var err error
-	jwtAccessToken.Raw, err = jwtAccessToken.SignedString(key)
+	signedAccessToken, err := jwtAccessToken.SignedString(key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign access token")
+	}
+
+	accessToken, err := j.Parse(signedAccessToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse access token: %w", err)
 	}
 
 	jwtRefreshToken := jwt.NewWithClaims(signingMethod, CustomClaims{
 		TokenType: "refresh",
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject: userId.String(),
-			Issuer: issuer,
+			Subject:   userId.String(),
+			Issuer:    issuer,
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Minute * 15)),
-			IssuedAt: jwt.NewNumericDate(now),
+			IssuedAt:  jwt.NewNumericDate(now),
 		},
 	})
 
-	jwtRefreshToken.Raw, err = jwtRefreshToken.SignedString(key)
+	signedRefreshToken, err := jwtRefreshToken.SignedString(key)
 	if err != nil {
-		return nil, fmt.Errorf("failed to sign access token")
+		return nil, fmt.Errorf("failed to sign refresh token")
+	}
+
+	refreshToken, err := j.Parse(signedRefreshToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse refresh token: %w", err)
 	}
 
 	return &TokenPair{
-		AccessToken: jwtAccessToken,
-		RefreshToken: jwtRefreshToken,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
 	}, nil
 }
