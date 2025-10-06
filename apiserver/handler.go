@@ -58,9 +58,8 @@ func (s *ApiServer) signupHandler() http.HandlerFunc {
 
 }
 
-
 type SigninRequest struct {
-	Email string `json:"email"`
+	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
@@ -75,6 +74,11 @@ func (r SigninRequest) Validate() error {
 	return nil
 }
 
+type SigninResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
 func (s *ApiServer) signinHandler() http.HandlerFunc {
 	return handler(func(w http.ResponseWriter, r *http.Request) error {
 		req, err := decode[SigninRequest](r)
@@ -84,11 +88,27 @@ func (s *ApiServer) signinHandler() http.HandlerFunc {
 
 		user, err := s.store.Users.ByEmail(r.Context(), req.Email)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return NewErrWithStatus(http.StatusInternalServerError, err)
 		}
 
 		if err := user.ComparePassword(req.Password); err != nil {
 			return NewErrWithStatus(http.StatusUnauthorized, err)
 		}
+
+		tokenPair, err := s.JwtManager.GenerateTokenPair(user.Id)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return NewErrWithStatus(http.StatusInternalServerError, err)
+		}
+
+		if err := encode(ApiResponse[SigninResponse]{
+			Data: &SigninResponse{
+				AccessToken:  tokenPair.AccessToken.Raw,
+				RefreshToken: tokenPair.RefreshToken.Raw,
+			},
+		}, http.StatusOK, w); err != nil {
+			return NewErrWithStatus(http.StatusInternalServerError, err)
+		}
+
+		return nil
 	})
 }
