@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type RefreshTokenStore struct {
@@ -32,18 +32,17 @@ type RefreshToken struct {
 }
 
 func (s *RefreshTokenStore) getBase64HashFromToken(token *jwt.Token) (string, error) {
-	hashedToken, err := bcrypt.GenerateFromPassword([]byte(token.Raw), bcrypt.DefaultCost)
-	if err != nil {
-		return "", fmt.Errorf("bcrypt.GenerateFromPassword: %w", err)
-	}
-	basse64TokenHash := base64.StdEncoding.EncodeToString(hashedToken)
-	return basse64TokenHash, nil
+	h := sha256.New()
+	h.Write([]byte(token.Raw))
+	hashedBytes := h.Sum(nil)
+	base64TokenHash := base64.StdEncoding.EncodeToString(hashedBytes)
+	return base64TokenHash, nil
 }
 
 func (s *RefreshTokenStore) Create(ctx context.Context, userId uuid.UUID, token *jwt.Token) (*RefreshToken, error) {
 	const insert = `
-		INSERT INTO refresh_tokens (user_id, hashed_token, expires_at, created_at)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO refresh_tokens (user_id, hashed_token, expires_at)
+		VALUES ($1, $2, $3) RETURNING *;
 	`
 	base64TokenHash, err := s.getBase64HashFromToken(token)
 	if err != nil {
