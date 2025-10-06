@@ -31,22 +31,49 @@ type RefreshToken struct {
 	CreatedAt   int64  `db:"created_at"`
 }
 
+func (s *RefreshTokenStore) getBase64HashFromToken(token *jwt.Token) (string, error) {
+	hashedToken, err := bcrypt.GenerateFromPassword([]byte(token.Raw), bcrypt.DefaultCost)
+	if err != nil {
+		return "", fmt.Errorf("bcrypt.GenerateFromPassword: %w", err)
+	}
+	basse64TokenHash := base64.StdEncoding.EncodeToString(hashedToken)
+	return basse64TokenHash, nil
+}
+
 func (s *RefreshTokenStore) Create(ctx context.Context, userId uuid.UUID, token *jwt.Token) (*RefreshToken, error) {
 	const insert = `
 		INSERT INTO refresh_tokens (user_id, hashed_token, expires_at, created_at)
 		VALUES ($1, $2, $3, $4)
 	`
-	hashedToken, err := bcrypt.GenerateFromPassword([]byte(token.Raw), bcrypt.DefaultCost)
+	base64TokenHash, err := s.getBase64HashFromToken(token)
 	if err != nil {
-		return nil, fmt.Errorf("failed to hash token: %w", err)
+		return nil, fmt.Errorf("failed to get base64 encoded: %w", err)
 	}
-	base64TokenHash := base64.StdEncoding.EncodeToString(hashedToken)
+
+	expiresAt, err := token.Claims.GetExpirationTime()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get expired_at: %w", err)
+	}
 
 	var refreshToken RefreshToken
-	if err := s.db.GetContext(ctx, &refreshToken, insert, userId, base64TokenHash); err != nil {
+	if err := s.db.GetContext(ctx, &refreshToken, insert, userId, base64TokenHash, expiresAt.Time); err != nil {
 		return nil, fmt.Errorf("failed to create refresh token: %w", err)
 	}
 
 	return &refreshToken, nil
 }
 
+func (s *RefreshTokenStore) ByPrimaryKey(ctx context.Context, userId uuid.UUID, token *jwt.Token) (*RefreshToken, error) {
+	const query = `SELECT * FROM refresh_tokens WHERE user_id = $1 and hashed_token = $2;`
+	base64TokenHash, err := s.getBase64HashFromToken(token)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get base64 encoded: %w", err)
+	}
+
+	var refreshToken RefreshToken
+	if err := s.db.GetContext(ctx, &refreshToken, query, userId, base64TokenHash); err != nil {
+		return nil, fmt.Errorf("failed to fetch hash_token: %w", err)
+	}
+
+	return &refreshToken, nil
+}
