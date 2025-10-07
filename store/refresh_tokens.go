@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"time"
 
 	"fmt"
 
@@ -27,8 +28,8 @@ func NewRefreshTokenStore(db *sql.DB) *RefreshTokenStore {
 type RefreshToken struct {
 	UserId      int64  `db:"user_id"`
 	HashedToken string `db:"hashed_token"`
-	ExpiresAt   int64  `db:"expires_at"`
-	CreatedAt   int64  `db:"created_at"`
+	ExpiresAt   time.Time  `db:"expires_at"`
+	CreatedAt   time.Time  `db:"created_at"`
 }
 
 func (s *RefreshTokenStore) getBase64HashFromToken(token *jwt.Token) (string, error) {
