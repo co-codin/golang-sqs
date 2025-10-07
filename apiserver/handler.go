@@ -100,6 +100,16 @@ func (s *ApiServer) signinHandler() http.HandlerFunc {
 			return NewErrWithStatus(http.StatusInternalServerError, err)
 		}
 
+		_, err = s.store.RefreshTokens.DeleteUserTokens(r.Context(), user.Id)
+		if err != nil {
+			return NewErrWithStatus(http.StatusInternalServerError, err)
+		}
+		
+		_, err = s.store.RefreshTokens.Create(r.Context(), user.Id, tokenPair.RefreshToken)
+		if err != nil {
+			return NewErrWithStatus(http.StatusInternalServerError, err)
+		}
+
 		if err := encode(ApiResponse[SigninResponse]{
 			Data: &SigninResponse{
 				AccessToken:  tokenPair.AccessToken.Raw,

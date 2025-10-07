@@ -43,4 +43,9 @@ func TestRefreshTokenStore(t *testing.T) {
 	require.Equal(t, refreshTokenRecord.CreatedAt, refreshTokenRecord2.CreatedAt)
 	require.Equal(t, refreshTokenRecord.ExpiresAt, refreshTokenRecord2.ExpiresAt)
 
+	result, err := refreshTokenStore.DeleteUserTokens(ctx, user.Id)
+	require.NoError(t, err)
+	rowsAffected, err := result.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), rowsAffected)
 }
