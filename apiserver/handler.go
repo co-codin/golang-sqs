@@ -2,11 +2,15 @@ package apiserver
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"go-sqs/reports"
 	"net/http"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/google/uuid"
 )
 
@@ -215,6 +219,20 @@ func (r CreateReportRequest) Validate() error {
 	return nil
 }
 
+type ApiReport struct {
+	Id                   uuid.UUID  `json:"id"`
+	ReportType           string     `json:"report_type,omitempty"`
+	OutputFilePath       *string    `json:"output_file_path,omitempty"`
+	DownloadUrl          *string    `json:"download_url,omitempty"`
+	DownloadUrlExpiresAt *time.Time `json:"download_url_expires_at,omitempty"`
+	ErrorMessage         *string    `json:"error_message,omitempty"`
+	CreatedAt            time.Time  `json:"created_at,omitempty"`
+	StartedAt            *time.Time `json:"started_at,omitempty"`
+	CompletedAt          *time.Time `json:"completed_at,omitempty"`
+	FailedAt             *time.Time `json:"failed_at,omitempty"`
+	Status               string     `json:"status,omitempty"`
+}
+
 func (s *ApiServer) createReportHandler() http.HandlerFunc {
 	return handler(func(w http.ResponseWriter, r *http.Request) error {
 		req, err := decode[CreateReportRequest](r)
@@ -232,6 +250,48 @@ func (s *ApiServer) createReportHandler() http.HandlerFunc {
 			return NewErrWithStatus(http.StatusInternalServerError, err)
 		}
 
-		
+		sqsMessage := reports.SqsMessage{
+			UserId:   user.Id,
+			ReportId: report.Id,
+		}
+
+		bytes, err := json.Marshal(sqsMessage)
+		if err != nil {
+			return NewErrWithStatus(http.StatusInternalServerError, err)
+		}
+
+		queueUrlOutput, err := s.sqsClient.GetQueueUrl(r.Context(), &sqs.GetQueueUrlInput{
+			QueueName: aws.String(s.Config.SqsQueue),
+		})
+		if err != nil {
+			return NewErrWithStatus(http.StatusInternalServerError, err)
+		}
+
+		_, err = s.sqsClient.SendMessage(r.Context(), &sqs.SendMessageInput{
+			QueueUrl:    queueUrlOutput.QueueUrl,
+			MessageBody: aws.String(string(bytes)),
+		})
+		if err != nil {
+			return NewErrWithStatus(http.StatusInternalServerError, err)
+		}
+
+		if err := encode(ApiResponse[ApiReport]{
+			Data: &ApiReport{
+				Id:             report.Id,
+				ReportType:     report.ReportType,
+				OutputFilePath: report.OutputFilePath,
+				DownloadUrl:    report.DownloadUrl,
+				ErrorMessage:   report.ErrorMessage,
+				CreatedAt:      report.CreatedAt,
+				StartedAt:      report.StartedAt,
+				CompletedAt:    report.CompletedAt,
+				FailedAt:       report.FailedAt,
+				Status:         report.Status(),
+			},
+		}, http.StatusCreated, w); err != nil {
+			return NewErrWithStatus(http.StatusInternalServerError, err)
+		}
+
+		return nil
 	})
 }

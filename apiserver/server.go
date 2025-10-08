@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 )
 
 type ApiServer struct {
@@ -16,14 +18,16 @@ type ApiServer struct {
 	logger *slog.Logger
 	store  *store.Store
 	JwtManager *JwtManager
+	sqsClient *sqs.Client
 }
 
-func New(config *config.Config, logger *slog.Logger, store *store.Store, jwtManager *JwtManager) *ApiServer {
+func New(config *config.Config, logger *slog.Logger, store *store.Store, jwtManager *JwtManager, sqsClient *sqs.Client) *ApiServer {
 	return &ApiServer{
 		Config: config,
 		logger: logger,
 		store:  store,
 		JwtManager: jwtManager,
+		sqsClient: sqsClient,
 	}
 }
 

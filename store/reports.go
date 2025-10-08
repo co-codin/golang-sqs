@@ -30,9 +30,27 @@ type Report struct {
 	ExpiresAt      *time.Time `db:"expires_at"`
 	ErrorMessage   *string    `db:"error_message"`
 	CreatedAt      time.Time  `db:"created_at"`
-	StartedAt      *time.Time  `db:"started_at"`
+	StartedAt      *time.Time `db:"started_at"`
 	FailedAt       *time.Time `db:"failed_at"`
 	CompletedAt    *time.Time `db:"completed_at"`
+}
+
+func (r *Report) IsDone() bool {
+	return r.FailedAt != nil || r.CompletedAt != nil
+}
+
+func (r *Report) Status() string {
+	switch {
+	case r.StartedAt == nil:
+		return "started"
+	case r.StartedAt != nil && !r.IsDone():
+		return "processing"
+	case r.CompletedAt != nil:
+		return "completed"
+	case r.FailedAt != nil:
+		return "failed"
+	}
+	return "unknown"
 }
 
 func (s *ReportStore) Create(ctx context.Context, userId uuid.UUID, reportType string) (*Report, error) {

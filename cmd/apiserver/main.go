@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"go-sqs/apiserver"
 	"go-sqs/config"
 	"go-sqs/store"
@@ -11,6 +12,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/joho/godotenv"
 )
 
@@ -41,7 +46,26 @@ func run() error {
 	}
 	dataStore := store.New(db)
 	jwtManager := apiserver.NewJwtManager(conf)
-	server := apiserver.New(conf, logger, dataStore, jwtManager)
+
+	sdkConfig, err := awsconfig.LoadDefaultConfig(ctx,
+		awsconfig.WithRegion("us-east-1"),
+		awsconfig.WithCredentialsProvider(credentials.StaticCredentialsProvider{
+			Value: aws.Credentials{
+				AccessKeyID:     conf.AwsAccessKeyID,
+				SecretAccessKey: conf.AwsAccessSecretKey,
+			},
+		}),
+	)
+	if err != nil {
+		fmt.Println("couldn't load default config")
+		fmt.Println(err)
+	}
+
+	sqsClient := sqs.NewFromConfig(sdkConfig, func(options *sqs.Options) {
+		options.BaseEndpoint = aws.String("http://localhost:4566")
+	})
+
+	server := apiserver.New(conf, logger, dataStore, jwtManager, sqsClient)
 	if err = server.Start(ctx); err != nil {
 		return err
 	}
