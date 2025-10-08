@@ -25,6 +25,8 @@ type Config struct {
 	Env                  Env    `env:"ENV" envDefault:"dev"`
 	JwtSecret            string `env:"JWT_SECRET"`
 	ProjectRoot          string `env:"PROJECT_ROOT"`
+	AwsAccessKeyID string `env:"AWS_ACCESS_KEY_ID"`
+	AwsAccessSecretKey string `env:"AWS_SECRET_ACCESS_KEY"`
 	S3LocalstackEndpoint string `env:"S3_LOCALSTACK_ENDPOINT"`
 	LocalstackEndpoint   string `env:"LOCALSTACK_ENDPOINT"`
 	S3Bucket             string `env:"S3_BUCKET"`

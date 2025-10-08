@@ -6,11 +6,13 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"go-sqs/config"
 	"go-sqs/store"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/google/uuid"
 )
@@ -19,13 +21,17 @@ type ReportBuilder struct {
 	reportStore *store.ReportStore
 	lozClient   *LozClient
 	s3Client    *s3.Client
+	config      *config.Config
 }
 
-func NewReportBuilder(reportStore *store.ReportStore, lozClient *LozClient, s3Client *s3.Client) *ReportBuilder {
+func NewReportBuilder(reportStore *store.ReportStore, lozClient *LozClient, s3Client *s3.Client, config *config.Config) *ReportBuilder {
+	
+	
 	return &ReportBuilder{
 		reportStore: reportStore,
 		lozClient:   lozClient,
 		s3Client:    s3Client,
+		config:      config,
 	}
 }
 
@@ -67,7 +73,7 @@ func (b *ReportBuilder) Build(ctx context.Context, userId uuid.UUID, reportId uu
 	csvWriter := csv.NewWriter(gzipWriter)
 	header := []string{"Name", "Id", "Category", "Description", "Image", "Common_Locations", "Drops", "Dlc"}
 	if err := csvWriter.Write(header); err != nil {
-		return nil, fmt.Errorf("Failed to write csv header: %w", err)
+		return nil, fmt.Errorf("failed to write csv header: %w", err)
 	}
 
 	for _, monster := range resp.Data {
@@ -98,6 +104,24 @@ func (b *ReportBuilder) Build(ctx context.Context, userId uuid.UUID, reportId uu
 
 	if err := gzipWriter.Close(); err != nil {
 		return nil, fmt.Errorf("failed to close gzip: %w", err)
+	}
+
+	key := "/users/" + userId.String() + "/report/" + reportId.String() + ".csv.gz"
+	_, err = b.s3Client.PutObject(ctx, &s3.PutObjectInput{
+		Key:    aws.String(key),
+		Bucket: aws.String(b.config.S3Bucket),
+		Body:   bytes.NewReader(buffer.Bytes()),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to upload report to %s: %w", key, err)
+	}
+
+	now = time.Now()
+	report.OutputFilePath = &key
+	report.CompletedAt = &now
+	report, err = b.reportStore.Update(ctx, report)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update report %s for user %s: %w", reportId, userId, err)
 	}
 
 	return report, nil
