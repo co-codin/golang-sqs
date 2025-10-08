@@ -295,3 +295,45 @@ func (s *ApiServer) createReportHandler() http.HandlerFunc {
 		return nil
 	})
 }
+
+func (s *ApiServer) getReportHandler() http.HandlerFunc {
+	return handler(func(w http.ResponseWriter, r *http.Request) error {
+		reportIdStr := r.PathValue("id")
+		reportId, err := uuid.Parse(reportIdStr)
+		if err != nil {
+			return NewErrWithStatus(http.StatusBadRequest, err)
+		}
+
+		user, ok := UserFromContext(r.Context())
+		if !ok {
+			return NewErrWithStatus(http.StatusUnauthorized, errors.New("user not found in context"))
+		}
+
+		report, err := s.store.ReportStore.ByPrimaryKey(r.Context(), user.Id, reportId)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return NewErrWithStatus(http.StatusNotFound, err)
+			}
+			return NewErrWithStatus(http.StatusInternalServerError, err)
+		}
+
+		if err := encode(ApiResponse[ApiReport]{
+			Data: &ApiReport{
+				Id:             report.Id,
+				ReportType:     report.ReportType,
+				OutputFilePath: report.OutputFilePath,
+				DownloadUrl:    report.DownloadUrl,
+				ErrorMessage:   report.ErrorMessage,
+				CreatedAt:      report.CreatedAt,
+				StartedAt:      report.StartedAt,
+				CompletedAt:    report.CompletedAt,
+				FailedAt:       report.FailedAt,
+				Status:         report.Status(),
+			},
+		}, int(http.StatusOK), w); err != nil {
+			return NewErrWithStatus(http.StatusInternalServerError, err)
+		}
+
+		return nil
+	})
+}
