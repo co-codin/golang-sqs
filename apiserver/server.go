@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 )
 
@@ -19,15 +20,17 @@ type ApiServer struct {
 	store  *store.Store
 	JwtManager *JwtManager
 	sqsClient *sqs.Client
+	presignClient *s3.PresignClient
 }
 
-func New(config *config.Config, logger *slog.Logger, store *store.Store, jwtManager *JwtManager, sqsClient *sqs.Client) *ApiServer {
+func New(config *config.Config, logger *slog.Logger, store *store.Store, jwtManager *JwtManager, sqsClient *sqs.Client, presignClient *s3.PresignClient) *ApiServer {
 	return &ApiServer{
 		Config: config,
 		logger: logger,
 		store:  store,
 		JwtManager: jwtManager,
 		sqsClient: sqsClient,
+		presignClient: presignClient,
 	}
 }
 

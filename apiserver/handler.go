@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/google/uuid"
 )
@@ -315,6 +316,27 @@ func (s *ApiServer) getReportHandler() http.HandlerFunc {
 				return NewErrWithStatus(http.StatusNotFound, err)
 			}
 			return NewErrWithStatus(http.StatusInternalServerError, err)
+		}
+
+		if report.CompletedAt != nil && report.ExpiresAt != nil && report.ExpiresAt.Before(time.Now()) {
+			// to s3 ppresign client
+			expiresAt := time.Now().Add(time.Second * 10)
+			signedUrl, err := s.presignClient.PresignGetObject(r.Context(), &s3.GetObjectInput{
+				Bucket: aws.String(s.Config.S3Bucket),
+				Key: report.OutputFilePath,
+			}, func(options *s3.PresignOptions) {
+				options.Expires = time.Second * 10
+			})
+			if err != nil {
+				return NewErrWithStatus(http.StatusInternalServerError, err)
+			}
+
+			report.DownloadUrl = &signedUrl.URL
+			report.ExpiresAt = &expiresAt
+			report, err = s.store.ReportStore.Update(r.Context(), report)
+			if err != nil {
+				return NewErrWithStatus(http.StatusInternalServerError, err)
+			}
 		}
 
 		if err := encode(ApiResponse[ApiReport]{

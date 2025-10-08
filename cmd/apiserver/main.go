@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/joho/godotenv"
 )
@@ -65,7 +66,14 @@ func run() error {
 		options.BaseEndpoint = aws.String("http://localhost:4566")
 	})
 
-	server := apiserver.New(conf, logger, dataStore, jwtManager, sqsClient)
+	s3Client := s3.NewFromConfig(sdkConfig, func(options *s3.Options) {
+		options.BaseEndpoint = aws.String("http://localhost:4566")
+		options.UsePathStyle = true
+	})
+
+	presignClient := s3.NewPresignClient(s3Client)
+
+	server := apiserver.New(conf, logger, dataStore, jwtManager, sqsClient, presignClient)
 	if err = server.Start(ctx); err != nil {
 		return err
 	}
