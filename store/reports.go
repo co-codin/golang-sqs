@@ -30,7 +30,7 @@ type Report struct {
 	ExpiresAt      *time.Time `db:"expires_at"`
 	ErrorMessage   *string    `db:"error_message"`
 	CreatedAt      time.Time  `db:"created_at"`
-	StartedAt      time.Time  `db:"started_at"`
+	StartedAt      *time.Time  `db:"started_at"`
 	FailedAt       *time.Time `db:"failed_at"`
 	CompletedAt    *time.Time `db:"completed_at"`
 }
