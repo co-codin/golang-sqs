@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"go-sqs/config"
 	"go-sqs/store"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -18,25 +19,25 @@ import (
 )
 
 type ReportBuilder struct {
+	config      *config.Config
 	reportStore *store.ReportStore
 	lozClient   *LozClient
 	s3Client    *s3.Client
-	config      *config.Config
+	logger *slog.Logger
 }
 
-func NewReportBuilder(reportStore *store.ReportStore, lozClient *LozClient, s3Client *s3.Client, config *config.Config) *ReportBuilder {
-	
-	
+func NewReportBuilder(reportStore *store.ReportStore, lozClient *LozClient, s3Client *s3.Client, config *config.Config, logger *slog.Logger) *ReportBuilder {
 	return &ReportBuilder{
 		reportStore: reportStore,
 		lozClient:   lozClient,
 		s3Client:    s3Client,
 		config:      config,
+		logger: logger,
 	}
 }
 
-func (b *ReportBuilder) Build(ctx context.Context, userId uuid.UUID, reportId uuid.UUID) (*store.Report, error) {
-	report, err := b.reportStore.ByPrimaryKey(ctx, userId, reportId)
+func (b *ReportBuilder) Build(ctx context.Context, userId uuid.UUID, reportId uuid.UUID) (report *store.Report, err error) {
+	report, err = b.reportStore.ByPrimaryKey(ctx, userId, reportId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get report by primary key: %w", err)
 	}
@@ -44,6 +45,18 @@ func (b *ReportBuilder) Build(ctx context.Context, userId uuid.UUID, reportId uu
 	if report.StartedAt != nil {
 		return report, nil
 	}
+
+	defer func() {
+		if err != nil {
+			now := time.Now()
+			errMsg := err.Error()
+			report.FailedAt = &now
+			report.ErrorMessage = &errMsg
+			if _, updateErr := b.reportStore.Update(ctx, report), updateErr != nil {
+				b.logger.Error("failed to update report", "error", err.Error())
+			}
+		}
+	}()
 
 	now := time.Now()
 	report.StartedAt = &now
@@ -123,6 +136,8 @@ func (b *ReportBuilder) Build(ctx context.Context, userId uuid.UUID, reportId uu
 	if err != nil {
 		return nil, fmt.Errorf("failed to update report %s for user %s: %w", reportId, userId, err)
 	}
+
+	b.logger.Info("generated report", "report_id", report.Id)
 
 	return report, nil
 }
