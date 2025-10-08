@@ -52,7 +52,7 @@ func (b *ReportBuilder) Build(ctx context.Context, userId uuid.UUID, reportId uu
 			errMsg := err.Error()
 			report.FailedAt = &now
 			report.ErrorMessage = &errMsg
-			if _, updateErr := b.reportStore.Update(ctx, report), updateErr != nil {
+			if _, updateErr := b.reportStore.Update(ctx, report); updateErr != nil {
 				b.logger.Error("failed to update report", "error", err.Error())
 			}
 		}
