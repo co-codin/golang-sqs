@@ -203,3 +203,35 @@ func (s *ApiServer) tokenRefreshHandler() http.HandlerFunc {
 		return nil
 	})
 }
+
+type CreateReportRequest struct {
+	ReportType string `json:"report_type"`
+}
+
+func (r CreateReportRequest) Validate() error {
+	if r.ReportType == "" {
+		return errors.New("report_type is required")
+	}
+	return nil
+}
+
+func (s *ApiServer) createReportHandler() http.HandlerFunc {
+	return handler(func(w http.ResponseWriter, r *http.Request) error {
+		req, err := decode[CreateReportRequest](r)
+		if err != nil {
+			return NewErrWithStatus(http.StatusBadRequest, err)
+		}
+
+		user, ok := UserFromContext(r.Context())
+		if !ok {
+			return NewErrWithStatus(http.StatusUnauthorized, errors.New("user not found in context"))
+		}
+
+		report, err := s.store.ReportStore.Create(r.Context(), user.Id, req.ReportType)
+		if err != nil {
+			return NewErrWithStatus(http.StatusInternalServerError, err)
+		}
+
+		
+	})
+}
