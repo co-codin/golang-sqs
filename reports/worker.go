@@ -2,30 +2,32 @@ package reports
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"go-sqs/config"
 	"log/slog"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
 	"github.com/aws/aws-sdk-go-v2/service/sqs/types"
 )
 
 type Worker struct {
-	config    *config.Config
-	builder   *ReportBuilder
-	logger    *slog.Logger
-	sqsClient *sqs.Client
-	channel chan types.Message
+	config      *config.Config
+	builder     *ReportBuilder
+	logger      *slog.Logger
+	sqsClient   *sqs.Client
+	channel     chan types.Message
 	concurrency int
 }
 
 func NewWorker(cfg *config.Config, builder *ReportBuilder, logger *slog.Logger, sqsClient *sqs.Client, maxConcurrency int) *Worker {
 	return &Worker{
-		config:    cfg,
-		builder:   builder,
-		logger:    logger,
-		sqsClient: sqsClient,
-		channel:   make(chan types.Message, maxConcurrency),
+		config:      cfg,
+		builder:     builder,
+		logger:      logger,
+		sqsClient:   sqsClient,
+		channel:     make(chan types.Message, maxConcurrency),
 		concurrency: maxConcurrency,
 	}
 }
@@ -39,20 +41,20 @@ func (w *Worker) Start(ctx context.Context) error {
 	}
 	w.logger.Info("SQS queue URL retrieved", slog.String("queueUrl", *queueUrlOutput.QueueUrl))
 
-	for i :=0; i < w.concurrency; i++ {
+	for i := 0; i < w.concurrency; i++ {
 		go func(id int) {
 			for {
 				select {
-					case <-ctx.Done():
-						w.logger.Error("Worker shutting down", slog.Int("workerId", id))
-						return
-					case message := <-w.channel:
-						if err := w.processMessage(ctx, message, queueUrlOutput.QueueUrl); err != nil {
-							w.logger.Error("failed to process message", "error", err)
-						}
-						w.logger.Info("Worker processing message", slog.Int("workerId", id), slog.String("messageId", *message.MessageId))
-				
+				case <-ctx.Done():
+					w.logger.Error("Worker shutting down", slog.Int("workerId", id))
+					return
+				case message := <-w.channel:
+					if err := w.processMessage(ctx, message, queueUrlOutput.QueueUrl); err != nil {
+						w.logger.Error("failed to process message", "error", err)
 					}
+					w.logger.Info("Worker processing message", slog.Int("workerId", id), slog.String("messageId", *message.MessageId))
+
+				}
 			}
 		}(i)
 	}
@@ -82,5 +84,34 @@ func (w *Worker) Start(ctx context.Context) error {
 }
 
 func (w *Worker) processMessage(ctx context.Context, message types.Message, queueUrl *string) error {
+	if message.Body == nil || *message.Body == "" {
+		w.logger.Warn("Received empty message body", slog.String("messageId", *message.MessageId))
+		return nil
+	}
+
+	var msg SqsMessage
+	if err := json.Unmarshal([]byte(*message.Body), &msg); err != nil {
+		w.logger.Error("failed to unmarshal message body", "error", err, slog.String("messageId", *message.MessageId))
+		return nil
+	}
+
+	builderCtx, cancel := context.WithTimeout(ctx, time.Second*10)
+	defer cancel()
+
+	_, err := w.builder.Build(builderCtx, msg.UserId, msg.ReportId)
+	if err != nil {
+		return fmt.Errorf("failed to build report: %w", err)
+	}
+
+	_, err = w.sqsClient.DeleteMessage(ctx, &sqs.DeleteMessageInput{
+		QueueUrl:      queueUrl,
+		ReceiptHandle: message.ReceiptHandle,
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to delete message from SQS: %w", err)
+	}
+
+	w.logger.Info("Successfully processed and deleted message", slog.String("messageId", *message.MessageId))
 	return nil
 }
