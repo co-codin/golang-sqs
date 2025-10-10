@@ -49,11 +49,20 @@ func (w *Worker) Start(ctx context.Context) error {
 					w.logger.Error("Worker shutting down", slog.Int("workerId", id))
 					return
 				case message := <-w.channel:
-					if err := w.processMessage(ctx, message, queueUrlOutput.QueueUrl); err != nil {
+					if err := w.processMessage(ctx, message); err != nil {
 						w.logger.Error("failed to process message", "error", err)
+						continue
 					}
 					w.logger.Info("Worker processing message", slog.Int("workerId", id), slog.String("messageId", *message.MessageId))
+					_, err = w.sqsClient.DeleteMessage(ctx, &sqs.DeleteMessageInput{
+						QueueUrl:      queueUrlOutput.QueueUrl,
+						ReceiptHandle: message.ReceiptHandle,
+					})
 
+					if err != nil {
+						w.logger.Error("failed to delete message from SQS: %w", err)
+					}
+					continue
 				}
 			}
 		}(i)
@@ -83,7 +92,7 @@ func (w *Worker) Start(ctx context.Context) error {
 
 }
 
-func (w *Worker) processMessage(ctx context.Context, message types.Message, queueUrl *string) error {
+func (w *Worker) processMessage(ctx context.Context, message types.Message) error {
 	if message.Body == nil || *message.Body == "" {
 		w.logger.Warn("Received empty message body", slog.String("messageId", *message.MessageId))
 		return nil
@@ -101,15 +110,6 @@ func (w *Worker) processMessage(ctx context.Context, message types.Message, queu
 	_, err := w.builder.Build(builderCtx, msg.UserId, msg.ReportId)
 	if err != nil {
 		return fmt.Errorf("failed to build report: %w", err)
-	}
-
-	_, err = w.sqsClient.DeleteMessage(ctx, &sqs.DeleteMessageInput{
-		QueueUrl:      queueUrl,
-		ReceiptHandle: message.ReceiptHandle,
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to delete message from SQS: %w", err)
 	}
 
 	w.logger.Info("Successfully processed and deleted message", slog.String("messageId", *message.MessageId))
